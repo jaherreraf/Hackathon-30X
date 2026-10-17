@@ -27,3 +27,10 @@ blinka.db
 # Uploads
 uploads/
 backend/uploads/
+
+# Frontend Build & Caches
+node_modules/
+dist/
+.output/
+.wrangler/
+

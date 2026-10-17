@@ -35,9 +35,25 @@ def test_rules_and_beneficiaries():
 
 
 def test_invoice_flow_and_resolution():
+    import uuid
+    from core.database import SessionLocal
+    from features.approvals.model import Approval
+    from features.decisions.model import Decision
+    from features.invoices.model import Invoice
+
+    db = SessionLocal()
+    db.query(Approval).delete()
+    db.query(Decision).delete()
+    db.query(Invoice).delete()
+    db.commit()
+    db.close()
+
+    lumen_num = f"LUM-{uuid.uuid4().hex[:6].upper()}"
+    ana_num = f"ANA-{uuid.uuid4().hex[:6].upper()}"
+
     # Factura 1: Lumen $800 -> PAY
     lumen_json = json.dumps({
-        "number": "LUM-100",
+        "number": lumen_num,
         "beneficiary": "Diseños Lumen",
         "amount": 800.0,
         "currency": "USD",
@@ -60,7 +76,7 @@ def test_invoice_flow_and_resolution():
 
     # Factura 3: Ana Pérez $2500 -> ESCALATE (supera umbral humano)
     ana_json = json.dumps({
-        "number": "ANA-200",
+        "number": ana_num,
         "beneficiary": "Ana Pérez",
         "amount": 2500.0,
         "currency": "USD",
