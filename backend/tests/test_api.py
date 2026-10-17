@@ -90,3 +90,43 @@ def test_invoice_flow_and_resolution():
     assert m["total"] >= 3
     assert m["payments_outside_rules"] == 0
     assert m["spent_budget"] >= 3300.0
+
+
+def test_simulator_is_read_only():
+    # Estado previo de auditoría y reglas
+    res_audit_before = client.get("/audit")
+    assert res_audit_before.status_code == 200
+    count_audit_before = len(res_audit_before.json())
+
+    res_rules_before = client.get("/rules")
+    assert res_rules_before.status_code == 200
+    rules_before = res_rules_before.json()
+
+    # Ejecutar simulación con reglas distintas
+    sim_payload = {
+        "rules": {
+            "company_name": "Acme Corp",
+            "period": "2026-10",
+            "per_payment_limit": 5000,
+            "human_approval_threshold": 4000,
+            "period_budget": 10000,
+            "allowed_currencies": ["USD", "EUR"],
+            "amount_tolerance": 800,
+            "duplicate_window_days": 30,
+            "min_confidence": 0.7,
+            "exchange_rates": [
+                {"currency": "USD", "rate_to_usd": 1.0},
+                {"currency": "EUR", "rate_to_usd": 1.08},
+            ],
+        }
+    }
+    res_sim = client.post("/simulator", json=sim_payload)
+    assert res_sim.status_code == 200
+
+    # Comprobar que no escribió en la base
+    res_audit_after = client.get("/audit")
+    assert len(res_audit_after.json()) == count_audit_before
+
+    res_rules_after = client.get("/rules")
+    assert res_rules_after.json()["human_approval_threshold"] == rules_before["human_approval_threshold"]
+    assert res_rules_after.json()["amount_tolerance"] == rules_before["amount_tolerance"]
