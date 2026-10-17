@@ -17,3 +17,25 @@ def log_event(
     )
     db.add(entry)
     return entry
+
+def list_entries(
+    db: Session,
+    event: str | None = None,
+    entity: str | None = None,
+    entity_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[AuditLog]:
+    query = db.query(AuditLog)
+    if event:
+        query = query.filter(AuditLog.event == event)
+    if entity:
+        query = query.filter(AuditLog.entity == entity)
+    if entity_id is not None:
+        query = query.filter(AuditLog.entity_id == entity_id)
+    return (
+        query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )

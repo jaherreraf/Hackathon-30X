@@ -18,7 +18,7 @@ from features.beneficiaries.routes import router as beneficiaries_router
 from features.invoices.routes      import router as invoices_router
 from features.decisions.routes     import router as decisions_router
 # from features.simulator.routes     import router as simulator_router
-# from features.audit.routes         import router as audit_router
+from features.audit.routes         import router as audit_router
 from features.metrics.routes       import router as metrics_router
 
 app = FastAPI(
@@ -42,9 +42,9 @@ app.include_router(beneficiaries_router, prefix="/beneficiaries", tags=["benefic
 app.include_router(invoices_router,      prefix="/invoices",      tags=["invoices"])
 app.include_router(decisions_router,     prefix="/decisions",     tags=["decisions"])
 # app.include_router(simulator_router,     prefix="/simulator",     tags=["simulator"])
-# app.include_router(audit_router,         prefix="/audit",         tags=["audit"])
+app.include_router(audit_router,         prefix="/audit",         tags=["audit"])
 app.include_router(metrics_router,       prefix="/metrics",       tags=["metrics"])
 
 @app.get("/health", tags=["health"])
 def health():
-    return {"status": "ok", "engine_version": settings.ENGINE_VERSION}
+    return {"status": "ok", "engine_version": settings.ENGINE_VERSION}

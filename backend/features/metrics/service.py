@@ -60,7 +60,7 @@ def calculate_metrics(db: Session) -> MetricsResponse:
             payments_outside_rules += 1
 
     total = len(invoices)
-    autonomy_pct = round((paid + held) / total * 100, 1) if total else 0.0
+    autonomy = round((paid + held) / total, 4) if total else 0.0
 
     active_rule = db.query(Rule).filter(Rule.active.is_(True)).first()
     period_budget = active_rule.period_budget if active_rule else 0.0
@@ -76,7 +76,7 @@ def calculate_metrics(db: Session) -> MetricsResponse:
         pending=pending,
         human_approved=human_approved,
         human_rejected=human_rejected,
-        autonomy_pct=autonomy_pct,
+        autonomy=autonomy,
         payments_outside_rules=payments_outside_rules,
         period_budget=period_budget,
         spent_budget=spent_budget,

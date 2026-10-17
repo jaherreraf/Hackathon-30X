@@ -1,8 +1,12 @@
 from datetime import datetime, date
+from typing import TYPE_CHECKING
 from sqlalchemy import String, Float, Date, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
+
+if TYPE_CHECKING:
+    from features.decisions.model import Decision
 
 
 class Invoice(Base):

@@ -7,6 +7,8 @@ venv/
 # Env
 .env
 .env.*
+!.env.example
+
 
 # Database
 *.db
@@ -21,3 +23,7 @@ blinka.db
 .DS_Store
 .idea/
 .vscode/
+
+# Uploads
+uploads/
+backend/uploads/

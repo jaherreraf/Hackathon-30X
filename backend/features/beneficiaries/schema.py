@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 class BeneficiaryBase(BaseModel):
-    display_name: str = Field(..., min_length=1, max_length=160, examples=["Lumen Designs"])
+    display_name: str = Field(..., min_length=1, max_length=160, examples=["Diseños Lumen"])
     agreed_amount: float = Field(..., ge=0, description="Agreed amount per period (USD)", examples=[800.0])
     period_limit: float = Field(..., ge=0, description="Maximum amount to pay in the period (USD)", examples=[800.0])
     active: bool = True

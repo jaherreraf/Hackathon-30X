@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Any
-from pydantic import BaseModel, ConfigDict
+from typing import Any, Literal
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DecisionData(BaseModel):
@@ -16,3 +16,18 @@ class DecisionData(BaseModel):
     rules_snapshot: dict[str, Any] = {}
     engine_version: str = "1.0.0"
     created_at: datetime | None = None
+
+
+class ResolveRequest(BaseModel):
+    action: Literal["approve", "reject"]
+    user: str = Field(..., min_length=1, max_length=80)
+    comment: str | None = None
+
+
+class ResolveResponse(BaseModel):
+    decision_id: int
+    invoice_id: int
+    status: str            
+    action: str
+    user: str
+    comment: str | None = None

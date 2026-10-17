@@ -8,7 +8,7 @@ class MetricsResponse(BaseModel):
     pending: int             
     human_approved: int      
     human_rejected: int       
-    autonomy_pct: float      
+    autonomy: float      
     payments_outside_rules: int
     period_budget: float
     spent_budget: float
