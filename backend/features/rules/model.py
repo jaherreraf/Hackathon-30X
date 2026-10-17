@@ -1,12 +1,15 @@
 from datetime import datetime
-from sqlalchemy import String, Float, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Float, Boolean, DateTime, ForeignKey, JSON, Index, text, UniqueConstraint 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
 
-
 class Rule(Base):
     __tablename__ = "rules"
+    __table_args__ = (
+        Index("uq_single_active_rule", "active", unique=True,
+              sqlite_where=text("active = 1")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     company_name: Mapped[str] = mapped_column(String(120))
@@ -28,9 +31,9 @@ class Rule(Base):
         back_populates="rule", cascade="all, delete-orphan"
     )
 
-
 class ExchangeRate(Base):
     __tablename__ = "exchange_rates"
+    __table_args__ = (UniqueConstraint("rule_id", "currency", name="uq_rule_currency"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     rule_id: Mapped[int] = mapped_column(ForeignKey("rules.id"))
