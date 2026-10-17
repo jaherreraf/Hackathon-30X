@@ -1,3 +1,8 @@
+// ============================================================
+// UI / Domain types (Spanish) — used by components and views.
+// These stay as-is. The backend contract lives at the bottom.
+// ============================================================
+
 export type Moneda = string;
 
 export interface TasaCambio {
@@ -94,7 +99,11 @@ export interface InvoiceItem {
 
 export interface AuditEvent {
   id: string;
-  evento: "factura_recibida" | "decision_tomada" | "resolucion_humana" | "reglas_actualizadas";
+  evento:
+    | "factura_recibida"
+    | "decision_tomada"
+    | "resolucion_humana"
+    | "reglas_actualizadas";
   entidad: string;
   fecha: string;
   detalle: Record<string, unknown>;
@@ -125,4 +134,77 @@ export interface SimulationRow {
   simulada: DecisionType;
   razones_simuladas: string[];
   cambia: boolean;
+}
+
+// ============================================================
+// Backend contract types (English) — mirrors FastAPI schemas.
+// Used ONLY in src/api/index.ts to talk to the backend.
+// The rest of the app keeps using the Spanish domain types above.
+// ============================================================
+
+export type ApiDecision = "pay" | "hold" | "escalate";
+
+export type ApiInvoiceStatus =
+  | "paid"
+  | "held"
+  | "escalated"
+  | "approved_by_human"
+  | "rejected_by_human";
+
+export type ApiInvoiceSource = "pdf" | "image" | "text";
+
+export interface InvoiceListItem {
+  id: number;
+  number: string | null;
+  beneficiary: string | null;
+  amount_usd: number | null;
+  decision: ApiDecision;
+  reason_summary: string | null;
+  status: ApiInvoiceStatus;
+  created_at: string;
+}
+
+export interface InvoiceData {
+  number: string | null;
+  beneficiary_text: string | null;
+  beneficiary_id: number | null;
+  amount: number | null;
+  currency: string | null;
+  amount_usd: number | null;
+  due_date: string | null;
+  source: ApiInvoiceSource;
+  confidence: number | null;
+}
+
+export interface ApiRuleEvaluation {
+  rule: string;
+  passed: boolean;
+  effect: "hold" | "escalate" | null;
+  detail: string | null;
+}
+
+export interface DecisionData {
+  id: number;
+  decision: ApiDecision;
+  reasons: string[];
+  applied_rules: string[];
+  human_explanation: string;
+  evaluation: ApiRuleEvaluation[];
+  rules_snapshot: Record<string, unknown>;
+  engine_version: string;
+  created_at: string | null;
+}
+
+export interface InvoiceDetailOut {
+  id: number;
+  status: ApiInvoiceStatus;
+  invoice: InvoiceData;
+  decision: DecisionData;
+}
+
+export interface ResolveOut {
+  decision_id: number;
+  invoice_id: number;
+  action: "approve" | "reject";
+  new_status: "approved_by_human" | "rejected_by_human";
 }
