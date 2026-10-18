@@ -481,8 +481,65 @@ export function computeMetrics(invoices: InvoiceItem[], rules: Rules): Metrics {
   };
 }
 
-export async function simulate(_rules: Rules): Promise<SimulationRow[]> {
-  console.warn("[api] simulate: POST /simulator not wired in UI yet — returning empty");
-  await delay(300);
-  return [];
+interface ApiSimulationItem {
+  invoice_id: number;
+  number: string | null;
+  current_decision: ApiDecision;
+  simulated_decision: ApiDecision;
+  changed: boolean;
+  simulated_reasons: string[];
+}
+
+interface ApiSimulationResponse {
+  total: number;
+  changed_count: number;
+  results: ApiSimulationItem[];
+}
+
+export async function simulate(rules: Rules): Promise<SimulationRow[]> {
+  try {
+    const [simRes, invoices] = await Promise.all([
+      http<ApiSimulationResponse>("/simulator", {
+        method: "POST",
+        body: JSON.stringify({ rules: rulesToApiBody(rules) }),
+      }),
+      getInvoices(),
+    ]);
+    const invoiceMap = new Map(invoices.map((i) => [i.id, i]));
+    return simRes.results.map((item) => {
+      const inv = invoiceMap.get(String(item.invoice_id)) ?? {
+        id: String(item.invoice_id),
+        recibida: new Date().toISOString(),
+        estado: "escalada" as const,
+        factura: {
+          numero: item.number,
+          beneficiario_texto: null,
+          monto: null,
+          moneda: "USD",
+          monto_usd: null,
+          vencimiento: null,
+          origen: "correo" as const,
+          confianza: 0,
+        },
+        decision: {
+          decision: mapDecision(item.current_decision),
+          razones: [],
+          reglas_aplicadas: [],
+          explicacion_humana: "",
+          evaluacion: [],
+          snapshot_reglas: emptyRulesSnapshot(),
+        },
+      };
+      return {
+        invoice: inv,
+        actual: mapDecision(item.current_decision),
+        simulada: mapDecision(item.simulated_decision),
+        razones_simuladas: item.simulated_reasons,
+        cambia: item.changed,
+      };
+    });
+  } catch (e) {
+    console.error("[api] simulate failed:", e);
+    return [];
+  }
 }
