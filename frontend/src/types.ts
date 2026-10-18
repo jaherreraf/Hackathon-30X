@@ -11,6 +11,7 @@ export interface TasaCambio {
 }
 
 export interface Beneficiario {
+  id?: number;
   nombre_mostrar: string;
   monto_acordado: number;
   limite_periodo: number;

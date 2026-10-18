@@ -365,6 +365,7 @@ export async function getRules(): Promise<Rules> {
     http<ApiBeneficiario[]>("/beneficiaries"),
   ]);
   const beneficiarios: Beneficiario[] = apiBeneficiarios.map((b) => ({
+    id: b.id,
     nombre_mostrar: b.display_name,
     monto_acordado: b.agreed_amount,
     limite_periodo: b.period_limit,
@@ -374,10 +375,48 @@ export async function getRules(): Promise<Rules> {
 }
 
 export async function saveRules(rules: Rules): Promise<Rules> {
-  await http<ApiRuleOut>("/rules", {
-    method: "PUT",
-    body: JSON.stringify(rulesToApiBody(rules)),
-  });
+  const [existingBeneficiarios] = await Promise.all([
+    http<ApiBeneficiario[]>("/beneficiaries"),
+    http<ApiRuleOut>("/rules", {
+      method: "PUT",
+      body: JSON.stringify(rulesToApiBody(rules)),
+    }),
+  ]);
+
+  const existingMap = new Map(existingBeneficiarios.map((b) => [b.id, b]));
+  const existingByName = new Map(
+    existingBeneficiarios.map((b) => [b.display_name.trim().toLowerCase(), b]),
+  );
+
+  for (const b of rules.beneficiarios) {
+    const name = b.nombre_mostrar?.trim();
+    if (!name) continue;
+    const existing =
+      (b.id ? existingMap.get(b.id) : null) ||
+      existingByName.get(name.toLowerCase());
+    if (existing) {
+      await http<ApiBeneficiario>(`/beneficiaries/${existing.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          display_name: name,
+          agreed_amount: b.monto_acordado,
+          period_limit: b.limite_periodo,
+          active: b.activo,
+        }),
+      }).catch((err) => console.warn("[api] update beneficiary failed:", err));
+    } else {
+      await http<ApiBeneficiario>("/beneficiaries", {
+        method: "POST",
+        body: JSON.stringify({
+          display_name: name,
+          agreed_amount: b.monto_acordado,
+          period_limit: b.limite_periodo,
+          active: b.activo,
+        }),
+      }).catch((err) => console.warn("[api] create beneficiary failed:", err));
+    }
+  }
+
   return getRules();
 }
 
