@@ -50,7 +50,24 @@ function RulesForm({ value, onChange }: { value: Rules; onChange: (r: Rules) => 
         {NUM_FIELDS.map((k) => <label key={k} className="text-sm">{c[k]}<input type="number" step="any" className={inputCls + " mt-2 tabular"} value={value[k]} onChange={(e) => set(k, Number(e.target.value))} /></label>)}
       </div>
       <div><p className="mb-3">{es.reglasPage.monedas}</p><div className="grid gap-3 sm:grid-cols-3">
-        {["USD", "EUR", "COP"].map((m) => <CheckOption key={m} title={m} selected={value.monedas_permitidas.includes(m)} onClick={() => set("monedas_permitidas", value.monedas_permitidas.includes(m) ? value.monedas_permitidas.filter((x) => x !== m) : [...value.monedas_permitidas, m])} />)}
+        {["USD", "EUR", "COP"].map((m) => (
+          <CheckOption
+            key={m}
+            title={m}
+            selected={value.monedas_permitidas.includes(m)}
+            onClick={() => {
+              const active = value.monedas_permitidas.includes(m);
+              const next = active
+                ? value.monedas_permitidas.filter((x) => x !== m)
+                : [...value.monedas_permitidas, m];
+              const nextTasas = [...value.tasas_cambio];
+              if (!active && m === "COP" && !nextTasas.some((t) => t.moneda.toUpperCase() === "COP")) {
+                nextTasas.push({ moneda: "COP", tasa_a_usd: 0.00025 });
+              }
+              onChange({ ...value, monedas_permitidas: next, tasas_cambio: nextTasas });
+            }}
+          />
+        ))}
       </div></div>
     </div>
   );

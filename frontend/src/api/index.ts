@@ -192,6 +192,28 @@ function apiRuleToRules(api: ApiRuleOut, beneficiarios: Beneficiario[]): Rules {
 
 function rulesToApiBody(rules: Rules) {
   // Only the fields PUT /rules accepts. Beneficiarios go via POST /beneficiaries.
+  const ratesMap = new Map<string, number>();
+  for (const t of rules.tasas_cambio) {
+    if (t.moneda && t.tasa_a_usd > 0) {
+      ratesMap.set(t.moneda.trim().toUpperCase(), t.tasa_a_usd);
+    }
+  }
+  // USD is required by backend schema with rate 1.0
+  ratesMap.set("USD", 1.0);
+
+  // If COP is allowed and lacks a rate, provide a realistic default (1 USD ~ 4000 COP -> 0.00025)
+  if (rules.monedas_permitidas.includes("COP") && !ratesMap.has("COP")) {
+    ratesMap.set("COP", 0.00025);
+  }
+  if (rules.monedas_permitidas.includes("EUR") && !ratesMap.has("EUR")) {
+    ratesMap.set("EUR", 1.08);
+  }
+
+  const exchange_rates = Array.from(ratesMap.entries()).map(([currency, rate_to_usd]) => ({
+    currency,
+    rate_to_usd,
+  }));
+
   return {
     company_name: rules.nombre_empresa,
     period: rules.periodo,
@@ -202,10 +224,7 @@ function rulesToApiBody(rules: Rules) {
     amount_tolerance: rules.tolerancia_monto,
     duplicate_window_days: rules.ventana_duplicado_dias,
     min_confidence: rules.confianza_minima,
-    exchange_rates: rules.tasas_cambio.map((t) => ({
-      currency: t.moneda,
-      rate_to_usd: t.tasa_a_usd,
-    })),
+    exchange_rates,
   };
 }
 

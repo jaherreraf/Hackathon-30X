@@ -38,6 +38,7 @@ def seed_database():
             rule.exchange_rates = [
                 ExchangeRate(currency="USD", rate_to_usd=1.0),
                 ExchangeRate(currency="EUR", rate_to_usd=1.08),
+                ExchangeRate(currency="COP", rate_to_usd=0.00025),
             ]
             db.add(rule)
             db.flush()
