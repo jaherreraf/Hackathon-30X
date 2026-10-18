@@ -97,9 +97,38 @@ export function PillButton({
   );
 }
 
-export function PillLink({ to, children, hash }: { to: "/facturas" | "/reglas" | "/simulador" | "/auditoria" | "/cola" | "/metricas"; children: ReactNode; hash?: string }) {
+export function PillLink({
+  to,
+  children,
+  hash,
+  onClick,
+}: {
+  to: "/facturas" | "/reglas" | "/simulador" | "/auditoria" | "/cola" | "/metricas";
+  children: ReactNode;
+  hash?: string;
+  onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+}) {
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    onClick?.(e);
+    if (hash) {
+      const el = document.getElementById(hash);
+      if (el) {
+        e.preventDefault();
+        el.scrollIntoView({ behavior: "smooth" });
+        if (window.location.hash !== `#${hash}`) {
+          window.history.pushState(null, "", `${window.location.pathname}#${hash}`);
+        }
+      }
+    }
+  };
+
   return (
-    <Link to={to} {...(hash ? { hash } : {})} className={cn(pillBase, "bg-primary text-primary-foreground hover:-translate-y-0.5 hover:shadow-soft")}>
+    <Link
+      to={to}
+      {...(hash ? { hash } : {})}
+      onClick={handleClick}
+      className={cn(pillBase, "bg-primary text-primary-foreground hover:-translate-y-0.5 hover:shadow-soft")}
+    >
       {children}
       <ArrowUpRight className="h-4 w-4" />
     </Link>

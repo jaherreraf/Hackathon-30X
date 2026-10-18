@@ -39,11 +39,23 @@ export function SimPill({ className }: { className?: string }) {
 }
 
 export function UploadPill({ className, onClick }: { className?: string; onClick?: () => void }) {
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    onClick?.();
+    const el = document.getElementById("subir");
+    if (el) {
+      e.preventDefault();
+      el.scrollIntoView({ behavior: "smooth" });
+      if (window.location.hash !== "#subir") {
+        window.history.pushState(null, "", `${window.location.pathname}#subir`);
+      }
+    }
+  };
+
   return (
     <Link
       to="/facturas"
       hash="subir"
-      onClick={onClick}
+      onClick={handleClick}
       className={cn(
         "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-primary px-5 text-sm text-primary-foreground transition-all duration-150 hover:-translate-y-0.5 hover:shadow-soft",
         className,

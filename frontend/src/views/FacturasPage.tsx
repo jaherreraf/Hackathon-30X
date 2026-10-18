@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, FileUp, Loader2, Sparkles, XCircle } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { computeMetrics, getInvoices, getRules, uploadInvoice } from "@/api";
 import { HeroRibbon } from "@/components/HeroRibbon";
 import { InvoiceRow } from "@/components/InvoiceRow";
@@ -35,6 +35,15 @@ export function FacturasPage() {
   const data = inv.data;
   const metrics = data && rules.data ? computeMetrics(data, rules.data) : null;
   const filtered = (data ?? []).filter((i) => filter === "todas" || i.decision.decision === filter);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#subir") {
+      const timer = setTimeout(() => {
+        document.getElementById("subir")?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   return (
     <>
