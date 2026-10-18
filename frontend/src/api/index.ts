@@ -398,28 +398,42 @@ const store = () => usePayGuardStore.getState();
 const uid = () => Math.random().toString(36).slice(2, 10);
 const clone = <T,>(v: T): T => structuredClone(v);
 
-export async function uploadInvoice(input: UploadInput): Promise<InvoiceItem> {
-  console.warn("[api] uploadInvoice: POST /invoices not wired in UI yet — using mock");
-  await delay(1500);
-  const t = uploadTemplates[Math.floor(Math.random() * uploadTemplates.length)]!;
-  const item: InvoiceItem = {
-    id: `inv-${uid()}`,
-    recibida: new Date().toISOString(),
-    estado: "escalada",
-    factura: { ...t, monto_usd: t.monto },
-    decision: {
-      decision: "escalar",
-      razones: ["Mock: POST /invoices not wired in UI yet."],
-      reglas_aplicadas: [],
-      explicacion_humana: "",
-      evaluacion: [],
-      snapshot_reglas: emptyRulesSnapshot(),
-    },
-  };
-  store().addInvoice(item);
-  return clone(item);
-}
 
+export async function uploadInvoice(input: UploadInput): Promise<InvoiceItem> {
+  const form = new FormData();
+
+  if (input.tipo === "texto") {
+    form.append("source", "text");
+    form.append("text", input.texto ?? "");
+  } else {
+    const isPdf = input.nombreArchivo?.toLowerCase().endsWith(".pdf");
+    form.append("source", isPdf ? "pdf" : "image");
+    if (!input.file) {
+      throw new Error("No file provided");
+    }
+    form.append("file", input.file);
+  }
+
+  const res = await fetch(`${API_BASE}/invoices`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    let detail: unknown = `http_${res.status}`;
+    try {
+      const body = await res.json();
+      if (body && typeof body === "object" && "detail" in body) {
+        detail = (body as { detail: unknown }).detail;
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === "string" ? detail : `http_${res.status}`);
+  }
+  const detail = (await res.json()) as InvoiceDetailOut;
+  return detailToInvoiceItem(detail);
+}
 export function computeMetrics(invoices: InvoiceItem[], rules: Rules): Metrics {
   const total = invoices.length;
   const pagadas = invoices.filter(

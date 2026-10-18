@@ -126,6 +126,7 @@ export interface UploadInput {
   tipo: "archivo" | "texto";
   nombreArchivo?: string;
   texto?: string;
+  file?: File;        // ← agregar esta línea
 }
 
 export interface SimulationRow {

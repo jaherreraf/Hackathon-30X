@@ -146,21 +146,25 @@ function UploadBox() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const submit = async () => {
-    if ((tab === "archivo" && !file) || (tab === "texto" && !texto.trim())) return setErr(es.facturas.errorVacio);
-    setErr(null);
-    setBusy(true);
-    setResult(null);
-    try {
-      const r = await uploadInvoice(tab === "archivo" ? { tipo: "archivo", nombreArchivo: file!.name } : { tipo: "texto", texto });
-      setResult(r);
-      setFile(null);
-      setTexto("");
-    } catch {
-      setErr(es.estados.error);
-    } finally {
-      setBusy(false);
-    }
-  };
+      if ((tab === "archivo" && !file) || (tab === "texto" && !texto.trim())) return setErr(es.facturas.errorVacio);
+      setErr(null);
+      setBusy(true);
+      setResult(null);
+      try {
+        const r = await uploadInvoice(
+            tab === "archivo"
+              ? { tipo: "archivo", nombreArchivo: file!.name, file: file! }
+              : { tipo: "texto", texto }
+          );
+        setResult(r);
+        setFile(null);
+        setTexto("");
+      } catch {
+        setErr(es.estados.error);
+      } finally {
+        setBusy(false);
+      }
+    };
 
   return (
     <div className="panel grid gap-3 p-2 md:p-3 lg:grid-cols-[1.3fr_1fr]">
