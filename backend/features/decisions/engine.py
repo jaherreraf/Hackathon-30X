@@ -7,15 +7,15 @@ from datetime import date, timedelta
 ENGINE_VERSION = "1.0.0"
 
 PAY, HOLD, ESCALATE = "pay", "hold", "escalate"
-SPENT_STATUSES = {"paid", "approved_human"}   
-EPS = 0.005                                   
+SPENT_STATUSES = {"paid", "approved_human"}
+EPS = 0.005
 
 
 # ---------- Inputs ----------
 
 @dataclass(frozen=True)
 class BeneficiaryInfo:
-    key: str                  
+    key: str
     display_name: str
     agreed_amount: float
     period_limit: float
@@ -25,13 +25,13 @@ class BeneficiaryInfo:
 class InvoiceInput:
     number: str | None
     beneficiary_text: str | None
-    beneficiary_key: str | None            
-    beneficiary: BeneficiaryInfo | None   
+    beneficiary_key: str | None
+    beneficiary: BeneficiaryInfo | None
     amount: float | None
     currency: str | None
     due_date: date | None
     confidence: float = 0.0
-    suspicious: bool = False                
+    suspicious: bool = False
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,7 @@ class PriorRecord:
     number: str | None
     beneficiary_key: str | None
     amount_usd: float | None
-    status: str       
+    status: str
     received_on: date
 
 
@@ -74,7 +74,7 @@ class RulesConfig:
 class RuleResult:
     rule: str
     passed: bool
-    effect: str | None    
+    effect: str | None
     detail: str
 
 
@@ -88,7 +88,7 @@ class DecisionResult:
     engine_version: str = ENGINE_VERSION
 
     def to_dict(self) -> dict:
-        return asdict(self)    
+        return asdict(self)
 
 
 # ---------- Engine ----------
@@ -99,14 +99,13 @@ def decide(
     history: list[PriorRecord],
     today: date | None = None,
 ) -> DecisionResult:
-   
     today = today or date.today()
     try:
         return _decide(invoice, rules, history, today)
-    except Exception as exc:  
+    except Exception as exc:
         return DecisionResult(
             decision=ESCALATE,
-            reasons=[f"Internal error, escalated for safety: {exc}"],
+            reasons=[f"Error interno, se escala por seguridad: {exc}"],
             applied_rules=["ENGINE_ERROR"],
             evaluation=[RuleResult("ENGINE_ERROR", False, ESCALATE, str(exc))],
         )
@@ -119,6 +118,7 @@ def _usd(x: float) -> str:
 def _spent(records) -> float:
     return sum((r.amount_usd or 0.0) for r in records if r.status in SPENT_STATUSES)
 
+
 def _convert(invoice, rules) -> float | None:
     try:
         cur = (invoice.currency or "").strip().upper()
@@ -129,14 +129,15 @@ def _convert(invoice, rules) -> float | None:
     except Exception:
         return None
 
+
 def _resolve(results: list[RuleResult], amount_usd: float | None) -> DecisionResult:
     failed = [r for r in results if not r.passed]
     if any(r.effect == HOLD for r in failed):
         decision = HOLD
     elif failed:
-        decision = ESCALATE          
+        decision = ESCALATE
     else:
-        decision = PAY               
+        decision = PAY
     return DecisionResult(
         decision=decision,
         reasons=[r.detail for r in failed],
@@ -157,30 +158,30 @@ def _decide(invoice, rules, history, today) -> DecisionResult:
 
     missing = []
     if not (invoice.number or "").strip():
-        missing.append("number")
+        missing.append("número")
     if not (invoice.beneficiary_text or "").strip() or not invoice.beneficiary_key:
-        missing.append("beneficiary")
+        missing.append("beneficiario")
     if invoice.amount is None or invoice.amount <= 0:
-        missing.append("amount")
+        missing.append("monto")
     if not (invoice.currency or "").strip():
-        missing.append("currency")
+        missing.append("moneda")
     if not add("INCOMPLETE_DATA", not missing, ESCALATE,
-               f"Missing or invalid data: {', '.join(missing)}."):
+               f"Datos faltantes o inválidos: {', '.join(missing)}."):
         return _resolve(results, amount_usd)
 
     if not add("SUSPICIOUS_CONTENT", not invoice.suspicious, ESCALATE,
-               "The invoice contained instructions aimed at the agent; they were ignored."):
+               "La factura contenía instrucciones dirigidas al agente; fueron ignoradas."):
         return _resolve(results, amount_usd)
 
     if not add("LOW_CONFIDENCE", invoice.confidence >= rules.min_confidence, ESCALATE,
-               f"Extraction confidence {invoice.confidence:.2f} is below the minimum "
+               f"La confianza de extracción {invoice.confidence:.2f} está por debajo del mínimo "
                f"{rules.min_confidence:.2f}."):
         return _resolve(results, amount_usd)
 
     currency = invoice.currency.strip().upper()
     rate = rules.exchange_rates.get(currency)
     if not add("CURRENCY", currency in rules.allowed_currencies and rate is not None and rate > 0,
-               ESCALATE, f"Currency {currency} is not allowed or has no exchange rate."):
+               ESCALATE, f"La moneda {currency} no está permitida o no tiene tasa de cambio."):
         return _resolve(results, amount_usd)
 
     amount_usd = round(invoice.amount * rate, 2)
@@ -199,46 +200,46 @@ def _decide(invoice, rules, history, today) -> DecisionResult:
         for r in same
     )
     add("DUPLICATE", not (exact or near), HOLD,
-        "An invoice with the same number from this provider was already received." if exact
-        else f"This provider already sent the same amount in the last "
-             f"{rules.duplicate_window_days} days under a different number.")
+        "Ya se recibió una factura con el mismo número de este proveedor." if exact
+        else f"Este proveedor ya envió el mismo monto en los últimos "
+             f"{rules.duplicate_window_days} días bajo un número distinto.")
 
     add("BENEFICIARY", beneficiary is not None, ESCALATE,
-        f"'{invoice.beneficiary_text}' is not on the allowed beneficiary list.")
+        f"'{invoice.beneficiary_text}' no está en la lista de beneficiarios permitidos.")
 
     if beneficiary:
         add("AGREED_AMOUNT",
             abs(amount_usd - beneficiary.agreed_amount) <= rules.amount_tolerance + EPS,
             ESCALATE,
-            f"Amount {_usd(amount_usd)} does not match the agreed {_usd(beneficiary.agreed_amount)}.")
+            f"El monto {_usd(amount_usd)} no coincide con lo acordado {_usd(beneficiary.agreed_amount)}.")
     else:
-        add("AGREED_AMOUNT", True, None, "", "Skipped: beneficiary not on the list.")
+        add("AGREED_AMOUNT", True, None, "", "Omitida: beneficiario no está en la lista.")
 
     add("PAYMENT_LIMIT", amount_usd <= rules.per_payment_limit + EPS, ESCALATE,
-        f"Amount {_usd(amount_usd)} exceeds the per-payment limit of {_usd(rules.per_payment_limit)}.")
+        f"El monto {_usd(amount_usd)} supera el límite por pago de {_usd(rules.per_payment_limit)}.")
 
     add("HUMAN_APPROVAL", amount_usd < rules.human_approval_threshold, ESCALATE,
-        f"Amounts from {_usd(rules.human_approval_threshold)} always require human approval.")
+        f"Los montos desde {_usd(rules.human_approval_threshold)} siempre requieren aprobación humana.")
 
     spent_by_provider = _spent(same)
     if beneficiary and spent_by_provider > 0:
         add("BENEFICIARY_LIMIT",
             spent_by_provider + amount_usd <= beneficiary.period_limit + EPS, HOLD,
-            f"Paying {_usd(amount_usd)} on top of {_usd(spent_by_provider)} already paid would "
-            f"exceed this provider's period limit of {_usd(beneficiary.period_limit)}.")
+            f"Pagar {_usd(amount_usd)} sobre {_usd(spent_by_provider)} ya pagados superaría "
+            f"el límite del periodo de este proveedor de {_usd(beneficiary.period_limit)}.")
     else:
-        add("BENEFICIARY_LIMIT", True, None, "", "No prior spending on this provider (or skipped).")
+        add("BENEFICIARY_LIMIT", True, None, "", "Sin gasto previo en este proveedor (u omitida).")
 
     total_spent = _spent(history)
     add("BUDGET", total_spent + amount_usd <= rules.period_budget + EPS, HOLD,
-        f"Paying {_usd(amount_usd)} would exceed the period budget of {_usd(rules.period_budget)} "
-        f"({_usd(total_spent)} already spent).")
+        f"Pagar {_usd(amount_usd)} superaría el presupuesto del periodo de {_usd(rules.period_budget)} "
+        f"({_usd(total_spent)} ya gastados).")
 
     if invoice.due_date is None:
-        add("OVERDUE", False, ESCALATE, "The invoice has no due date, so it cannot be verified.")
+        add("OVERDUE", False, ESCALATE, "La factura no tiene fecha de vencimiento, no se puede verificar.")
     else:
         add("OVERDUE", invoice.due_date >= today, ESCALATE,
-            f"The invoice is overdue (due {invoice.due_date.isoformat()}).")
+            f"La factura está vencida (vencía el {invoice.due_date.isoformat()}).")
 
     recent = sum(
         (r.amount_usd or 0.0) for r in same
@@ -252,7 +253,7 @@ def _decide(invoice, rules, history, today) -> DecisionResult:
         and recent + amount_usd > threshold
     )
     add("SPLIT_PAYMENTS", not splitting, ESCALATE,
-        f"Recent invoices from this provider ({_usd(recent)}) plus this one "
-        f"({_usd(amount_usd)}) exceed {_usd(threshold)}: possible split payment.")
+        f"Las facturas recientes de este proveedor ({_usd(recent)}) más esta "
+        f"({_usd(amount_usd)}) superan {_usd(threshold)}: posible fraccionamiento.")
 
     return _resolve(results, amount_usd)
