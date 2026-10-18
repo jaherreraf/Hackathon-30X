@@ -44,6 +44,10 @@ app.include_router(simulator_router,     prefix="/simulator",     tags=["simulat
 app.include_router(audit_router,         prefix="/audit",         tags=["audit"])
 app.include_router(metrics_router,       prefix="/metrics",       tags=["metrics"])
 
-@app.get("/health", tags=["health"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["health"])
 def health():
     return {"status": "ok", "engine_version": settings.ENGINE_VERSION}
+
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+def root():
+    return {"status": "ok"}

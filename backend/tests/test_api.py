@@ -14,6 +14,12 @@ def test_health():
     assert res.status_code == 200
     assert res.json()["status"] == "ok"
 
+    res_head = client.head("/health")
+    assert res_head.status_code == 200
+
+    res_root = client.head("/")
+    assert res_root.status_code == 200
+
 
 def test_rules_and_beneficiaries():
     # 1. Rules
