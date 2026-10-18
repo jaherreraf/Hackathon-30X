@@ -37,12 +37,15 @@ export function FacturasPage() {
   const filtered = (data ?? []).filter((i) => filter === "todas" || i.decision.decision === filter);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (typeof window !== "undefined" && window.location.hash === "#subir") {
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         document.getElementById("subir")?.scrollIntoView({ behavior: "smooth" });
       }, 100);
-      return () => clearTimeout(timer);
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   return (
