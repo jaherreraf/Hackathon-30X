@@ -4,6 +4,8 @@
 
 Agente inteligente y determinista para la gestión, validación y pago autónomo de facturas empresariales.
 
+**Métricas clave:** pagos fuera de reglas **0** · autonomía **~66%** · prompt injection **neutralizado**.
+
 ---
 
 ## 📌 El Problema
@@ -22,6 +24,16 @@ El procesamiento manual de cuentas por pagar en las empresas es lento, costoso y
 4. **Simulador de Políticas "What-If" (Read-Only):** Permite proyectar el impacto de nuevas reglas sobre facturas históricas en memoria antes de aplicarlas.
 5. **Auditoría Unificada e Inmutable:** Trazabilidad completa de cada evento (`invoice_received` ➔ `data_extracted` ➔ `decision_made` ➔ `human_resolution`).
 
+### 📊 Métricas de impacto
+
+| Métrica | Valor | Criterio del hackathon |
+|---|---|---|
+| Pagos fuera de reglas (`payments_outside_rules`) | **0** | Seguridad (criterio #1) |
+| Autonomía (facturas decididas sin humano) | **~66%** | Autonomía (criterio #3) |
+| Explicabilidad | cada decisión muestra las 13 reglas evaluadas | Explicabilidad (criterio #2) |
+| Prompt injection | detectado y neutralizado (nunca paga por instrucción) | Seguridad |
+| Tests automatizados | 23 (unitarios + API + propiedades + read-only del simulador) | Evidencia |
+
 ---
 
 ## 🛠️ Stack Tecnológico
@@ -30,7 +42,7 @@ El procesamiento manual de cuentas por pagar en las empresas es lento, costoso y
 - **Framework:** FastAPI (Python 3.10+)
 - **Base de Datos & ORM:** SQLAlchemy 2.0 + SQLite (compatible con PostgreSQL)
 - **Modelos & Validación:** Pydantic v2
-- **IA & Extracción:** Google GenAI SDK (`gemini-3.8-flash`)
+- **IA & Extracción:** Google GenAI SDK (`gemini-2.0-flash-lite`)
 - **Testing:** Pytest (23 tests automatizados con pruebas de propiedades)
 
 ### Frontend
@@ -63,10 +75,11 @@ python -m venv venv
 # Instalar dependencias
 pip install -r requirements.txt
 
-# Configurar variables de entorno
-# Crea un archivo .env en la carpeta backend con:
-# GEMINI_API_KEY=tu_clave_de_gemini
-# GEMINI_MODEL=gemini-3.8-flash
+# Copiar el template de variables de entorno y completar la API key
+cp .env.example .env
+# Editar .env:
+#   GEMINI_API_KEY=tu_clave_de_gemini
+#   GEMINI_MODEL=gemini-2.0-flash-lite
 
 # Inicializar la base de datos limpia con reglas de demo
 python seed.py --reset
@@ -77,6 +90,8 @@ uvicorn main:app --reload
 * **API y Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 * **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
 
+**Obtener API key de Gemini (gratis):** [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+
 ### 3. Frontend
 
 En otra terminal:
@@ -86,10 +101,17 @@ cd frontend
 # Instalar dependencias
 pnpm install
 
+# Copiar el template de variables de entorno
+cp .env.example .env
+# Editar .env si el backend no corre en localhost:8000:
+#   VITE_API_URL=http://localhost:8000
+
 # Iniciar servidor de desarrollo
 pnpm dev
 ```
 * **Aplicación Web:** [http://localhost:8081/](http://localhost:8081/)
+
+> 💡 Si el frontend no carga, verificá que el backend esté corriendo y que `CORS_ORIGINS` incluya el puerto del frontend.
 
 ---
 
@@ -123,6 +145,31 @@ Incluye pruebas unitarias, pruebas de flujo API, validación de read-only del si
 | `BUDGET` | El pago superaría el presupuesto total disponible de la empresa | `hold` |
 | `OVERDUE` | Factura vencida o sin fecha de vencimiento | `escalate` |
 | `SPLIT_PAYMENTS` | Facturas consecutivas recientes que sugieren fraccionamiento de pagos | `escalate` |
+
+---
+
+## 📂 Datos de prueba
+
+En `samples/` hay facturas y mensajes ficticios para probar el agente desde el frontend:
+
+- `samples/facturas/` → PDFs e imágenes (canal "Archivo").
+- `samples/texto/` → mensajes de chat/correo (canal "Texto").
+- `samples/README.md` → configuración requerida y resultado esperado por archivo.
+
+**Orden recomendado:** `01 → 02 → 03 → 04 → 05 → 06 → 07`.
+El caso `02` (duplicado) requiere que el `01` ya esté subido.
+
+---
+
+## 🎬 Demo
+
+- **Video:** [pendiente / link a YouTube/Loom]
+- **Deploy:** [pendiente / link a Vercel/Render]
+
+Para probar localmente:
+1. Backend en `http://localhost:8000`.
+2. Frontend en `http://localhost:8081`.
+3. Abrir `/facturas` → subir una factura de `samples/`.
 
 ---
 
