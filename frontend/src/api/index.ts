@@ -1,8 +1,9 @@
 // API layer.
-// getInvoices / getInvoice / resolveDecision hit the real FastAPI backend.
-// Everything else stays mocked until those endpoints are implemented.
-// Translation from the backend's English contract to the UI's Spanish
-// domain types happens here, so views and components stay untouched.
+// This is the ONLY file that talks to the FastAPI backend.
+// Every function here translates between:
+//   - the backend's English JSON contract (FastAPI / Pydantic schemas)
+//   - the UI's Spanish domain types (src/types.ts: Factura, Decision, Rules, ...)
+// Views, components and hooks import from here; they never fetch directly.
 
 import { uploadTemplates } from "@/data/mock";
 import { usePayGuardStore } from "@/store/usePayGuardStore";
@@ -11,6 +12,7 @@ import type {
   ApiInvoiceStatus,
   ApiRuleEvaluation,
   AuditEvent,
+  Beneficiario,
   Decision,
   DecisionData,
   EvaluacionRegla,
@@ -25,6 +27,7 @@ import type {
   RuleCode,
   Rules,
   SimulationRow,
+  TasaCambio,
   UploadInput,
 } from "@/types";
 
@@ -48,7 +51,9 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
     let detail: unknown = `http_${res.status}`;
     try {
       const body = await res.json();
-      if (body && typeof body === "object" && "detail" in body) detail = (body as { detail: unknown }).detail;
+      if (body && typeof body === "object" && "detail" in body) {
+        detail = (body as { detail: unknown }).detail;
+      }
     } catch {
       /* ignore */
     }
@@ -137,6 +142,118 @@ function emptyRulesSnapshot(): Rules {
   };
 }
 
+// ============================================================
+// /rules + /beneficiaries <-> Rules  mappers
+// ============================================================
+
+interface ApiRuleOut {
+  id: number;
+  company_name: string;
+  period: string;
+  per_payment_limit: number;
+  human_approval_threshold: number;
+  period_budget: number;
+  allowed_currencies: string[];
+  amount_tolerance: number;
+  duplicate_window_days: number;
+  min_confidence: number;
+  active: boolean;
+  created_at: string;
+  exchange_rates: { currency: string; rate_to_usd: number; id: number }[];
+}
+
+interface ApiBeneficiario {
+  id: number;
+  normalized_name: string;
+  display_name: string;
+  agreed_amount: number;
+  period_limit: number;
+  active: boolean;
+}
+
+function apiRuleToRules(api: ApiRuleOut, beneficiarios: Beneficiario[]): Rules {
+  return {
+    nombre_empresa: api.company_name,
+    periodo: api.period,
+    limite_por_pago: api.per_payment_limit,
+    aprobacion_humana_desde: api.human_approval_threshold,
+    presupuesto_periodo: api.period_budget,
+    monedas_permitidas: api.allowed_currencies,
+    tolerancia_monto: api.amount_tolerance,
+    ventana_duplicado_dias: api.duplicate_window_days,
+    confianza_minima: api.min_confidence,
+    tasas_cambio: api.exchange_rates.map((e) => ({
+      moneda: e.currency,
+      tasa_a_usd: e.rate_to_usd,
+    })),
+    beneficiarios,
+  };
+}
+
+function rulesToApiBody(rules: Rules) {
+  // Only the fields PUT /rules accepts. Beneficiarios go via POST /beneficiaries.
+  return {
+    company_name: rules.nombre_empresa,
+    period: rules.periodo,
+    per_payment_limit: rules.limite_por_pago,
+    human_approval_threshold: rules.aprobacion_humana_desde,
+    period_budget: rules.presupuesto_periodo,
+    allowed_currencies: rules.monedas_permitidas,
+    amount_tolerance: rules.tolerancia_monto,
+    duplicate_window_days: rules.ventana_duplicado_dias,
+    min_confidence: rules.confianza_minima,
+    exchange_rates: rules.tasas_cambio.map((t) => ({
+      currency: t.moneda,
+      rate_to_usd: t.tasa_a_usd,
+    })),
+  };
+}
+
+// ============================================================
+// /metrics  <->  Metrics
+// ============================================================
+
+interface ApiMetrics {
+  total: number;
+  paid: number;
+  held: number;
+  escalated: number;
+  pending: number;
+  human_approved: number;
+  human_rejected: number;
+  autonomy: number;
+  payments_outside_rules: number;
+  period_budget: number;
+  spent_budget: number;
+  available_budget: number;
+}
+
+// ============================================================
+// /audit  <->  AuditEvent
+// ============================================================
+
+interface ApiAuditEvent {
+  id: number;
+  event: string;
+  entity: string;
+  entity_id: number;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
+const AUDIT_EVENT_MAP: Record<string, AuditEvent["evento"]> = {
+  invoice_received: "factura_recibida",
+  data_extracted: "decision_tomada",
+  decision_taken: "decision_tomada",
+  human_approval: "resolucion_humana",
+  rules_modified: "reglas_actualizadas",
+  rules_created: "reglas_actualizadas",
+};
+
+// ============================================================
+// /invoices  ->  InvoiceItem
+// ============================================================
+
 function listItemToInvoiceItem(d: InvoiceListItem): InvoiceItem {
   return {
     id: String(d.id),
@@ -190,7 +307,7 @@ function detailToInvoiceItem(d: InvoiceDetailOut): InvoiceItem {
 }
 
 // ============================================================
-// Real endpoints (backend implemented)
+// Real endpoints (all implemented on the backend)
 // ============================================================
 
 export async function getInvoices(): Promise<InvoiceItem[]> {
@@ -209,7 +326,6 @@ export async function resolveDecision(
   usuario: string,
   comentario?: string,
 ): Promise<InvoiceItem> {
-  // Resolve by invoice id: fetch detail to discover decision.id, post, then re-fetch.
   const detail = await http<InvoiceDetailOut>(`/invoices/${Number(id)}`);
   const decisionId = detail.decision.id;
   const action = tipo === "aprobada" ? "approve" : "reject";
@@ -224,8 +340,57 @@ export async function resolveDecision(
   return getInvoice(id);
 }
 
+export async function getRules(): Promise<Rules> {
+  const [apiRule, apiBeneficiarios] = await Promise.all([
+    http<ApiRuleOut>("/rules"),
+    http<ApiBeneficiario[]>("/beneficiaries"),
+  ]);
+  const beneficiarios: Beneficiario[] = apiBeneficiarios.map((b) => ({
+    nombre_mostrar: b.display_name,
+    monto_acordado: b.agreed_amount,
+    limite_periodo: b.period_limit,
+    activo: b.active,
+  }));
+  return apiRuleToRules(apiRule, beneficiarios);
+}
+
+export async function saveRules(rules: Rules): Promise<Rules> {
+  await http<ApiRuleOut>("/rules", {
+    method: "PUT",
+    body: JSON.stringify(rulesToApiBody(rules)),
+  });
+  return getRules();
+}
+
+export async function getMetrics(): Promise<Metrics> {
+  const api = await http<ApiMetrics>("/metrics");
+  return {
+    total: api.total,
+    pagadas: api.paid + api.human_approved,
+    frenadas: api.held + api.human_rejected,
+    escaladas: api.escalated,
+    pendientes: api.pending,
+    autonomia: api.autonomy,
+    pagos_fuera_de_reglas: api.payments_outside_rules,
+    presupuesto_total: api.period_budget,
+    presupuesto_gastado: api.spent_budget,
+    presupuesto_disponible: api.available_budget,
+  };
+}
+
+export async function getAudit(): Promise<AuditEvent[]> {
+  const api = await http<ApiAuditEvent[]>("/audit");
+  return api.map((e) => ({
+    id: String(e.id),
+    evento: AUDIT_EVENT_MAP[e.event] ?? "decision_tomada",
+    entidad: e.entity,
+    fecha: e.created_at,
+    detalle: e.detail,
+  }));
+}
+
 // ============================================================
-// Mocked endpoints (backend not implemented yet)
+// Still mocked (backend endpoint not consumed by UI yet)
 // ============================================================
 
 const delay = (ms = 350) => new Promise((r) => setTimeout(r, ms));
@@ -233,28 +398,8 @@ const store = () => usePayGuardStore.getState();
 const uid = () => Math.random().toString(36).slice(2, 10);
 const clone = <T,>(v: T): T => structuredClone(v);
 
-export async function getRules(): Promise<Rules> {
-  console.warn("[api] getRules: backend endpoint not wired yet — using mock");
-  await delay();
-  return clone(store().rules);
-}
-
-export async function saveRules(rules: Rules): Promise<Rules> {
-  console.warn("[api] saveRules: backend endpoint not wired yet — using mock");
-  await delay(500);
-  store().setRules(clone(rules));
-  store().addAudit({
-    id: uid(),
-    evento: "reglas_actualizadas",
-    entidad: rules.nombre_empresa,
-    fecha: new Date().toISOString(),
-    detalle: { reglas: rules },
-  });
-  return clone(rules);
-}
-
 export async function uploadInvoice(input: UploadInput): Promise<InvoiceItem> {
-  console.warn("[api] uploadInvoice: backend POST /invoices not wired yet — using mock");
+  console.warn("[api] uploadInvoice: POST /invoices not wired in UI yet — using mock");
   await delay(1500);
   const t = uploadTemplates[Math.floor(Math.random() * uploadTemplates.length)]!;
   const item: InvoiceItem = {
@@ -264,7 +409,7 @@ export async function uploadInvoice(input: UploadInput): Promise<InvoiceItem> {
     factura: { ...t, monto_usd: t.monto },
     decision: {
       decision: "escalar",
-      razones: ["Mock: backend POST /invoices not implemented yet."],
+      razones: ["Mock: POST /invoices not wired in UI yet."],
       reglas_aplicadas: [],
       explicacion_humana: "",
       evaluacion: [],
@@ -304,19 +449,7 @@ export function computeMetrics(invoices: InvoiceItem[], rules: Rules): Metrics {
 }
 
 export async function simulate(_rules: Rules): Promise<SimulationRow[]> {
-  console.warn("[api] simulate: backend endpoint not wired yet — returning empty");
+  console.warn("[api] simulate: POST /simulator not wired in UI yet — returning empty");
   await delay(300);
   return [];
-}
-
-export async function getMetrics(): Promise<Metrics> {
-  console.warn("[api] getMetrics: backend endpoint not wired yet — using mock");
-  await delay();
-  return computeMetrics(store().invoices, store().rules);
-}
-
-export async function getAudit(): Promise<AuditEvent[]> {
-  console.warn("[api] getAudit: backend endpoint not wired yet — using mock");
-  await delay();
-  return clone(store().audit).sort((a, b) => b.fecha.localeCompare(a.fecha));
 }
